@@ -8,10 +8,16 @@ import { texts } from "@/texts";
 import type { Community } from "@/types/application/community/community";
 import type { CommunityTopic } from "@/types/application/community/community-topic";
 import type { CreateCommunityDialogProps } from "@/types/routes/communities/create-community-dialog-props";
-import { Loader2, Plus, Star, Users } from "lucide-react";
+import { Loader2, Plus, Search, Star, Users, X } from "lucide-react";
 
-import { communitiesApi } from "@/lib/api";
+import { communitiesApi, searchApi } from "@/lib/api";
 import { resolveCdnUrl } from "@/lib/api/media";
+import {
+  COMMUNITY_SEARCH_LIMIT,
+  canSearchCommunities,
+  communityResults,
+  normalizeCommunitySearch,
+} from "@/lib/community-search";
 import { requireAuth } from "@/lib/require-auth";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +50,8 @@ function Comunidades() {
   const { toast } = useToast();
   const matchRoute = useMatchRoute();
   const [topic, setTopic] = useState<CommunityTopic | undefined>(undefined);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [allItems, setAllItems] = useState<Community[]>([]);
@@ -52,11 +60,33 @@ function Comunidades() {
   const cursorRef = useRef(cursor);
   cursorRef.current = cursor;
   const isDetail = matchRoute({ to: "/comunidades/$communityId" });
+  const normalizedSearch = normalizeCommunitySearch(search);
+  const searchActive = normalizedSearch.length > 0;
+  const searchReady =
+    canSearchCommunities(normalizedSearch) && normalizedSearch === debouncedSearch;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(normalizedSearch), 300);
+    return () => clearTimeout(timer);
+  }, [normalizedSearch]);
+
+  const {
+    data: searchData,
+    isFetching: searching,
+    isError: searchFailed,
+    refetch: retrySearch,
+  } = useQuery({
+    queryKey: ["community-directory-search", debouncedSearch],
+    queryFn: () => searchApi.search(debouncedSearch, ["communities"], COMMUNITY_SEARCH_LIMIT),
+    enabled: !isDetail && searchReady,
+    staleTime: 60_000,
+  });
+  const searchItems = searchReady ? communityResults(searchData?.items ?? []) : [];
 
   const { data: communitiesData, isFetching } = useQuery({
     queryKey: ["communities", topic, cursor],
     queryFn: () => communitiesApi.list(topic, cursor),
-    enabled: !isDetail,
+    enabled: !isDetail && !searchActive,
   });
 
   const nextCursor = communitiesData?.nextCursor ?? null;
@@ -66,7 +96,7 @@ function Comunidades() {
   const { data: favoritesData } = useQuery({
     queryKey: COMMUNITY_FAVORITES_KEY,
     queryFn: () => communitiesApi.favorites(),
-    enabled: !isDetail,
+    enabled: !isDetail && !searchActive,
   });
 
   useEffect(() => {
@@ -150,28 +180,149 @@ function Comunidades() {
           </CreateCommunityDialog>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {TOPICS.map((t) => (
-            <Pill
-              key={t}
-              active={(t === "Todas" && !topic) || t === topic}
-              onClick={() => handleTopicChange(t)}
+        <div className="relative w-full max-w-xl">
+          <Label htmlFor="community-directory-search" className="sr-only">
+            {texts.communities.searchLabel}
+          </Label>
+
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
+          />
+
+          <Input
+            id="community-directory-search"
+            type="search"
+            autoComplete="off"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={texts.communities.searchPlaceholder}
+            className="rounded-full border-border-soft bg-surface-1 pl-10 pr-10"
+          />
+
+          {search.length > 0 && (
+            <button
+              type="button"
+              aria-label={texts.communities.clearSearch}
+              title={texts.communities.clearSearch}
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-2.5 rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              {TOPIC_LABELS[t]}
-            </Pill>
-          ))}
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
-        {pinnedFavorites.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="flex items-center gap-1.5 text-sm font-medium text-text-strong">
-              <Star className="h-4 w-4 text-primary" />
+        {searchActive ? (
+          <section aria-label={texts.communities.searchLabel} className="space-y-3">
+            {!canSearchCommunities(normalizedSearch) ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                {texts.communities.searchMinLength}
+              </p>
+            ) : !searchReady || (searching && !searchData) ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
 
-              <>{texts.communities.favoritesTitle}</>
-            </h2>
+                <>{texts.communities.searching}</>
+              </p>
+            ) : searchFailed ? (
+              <div className="flex flex-wrap items-center gap-3" role="alert">
+                <p className="text-sm text-destructive">{texts.communities.searchError}</p>
+
+                <Button variant="outline" onClick={() => void retrySearch()}>
+                  {texts.communities.retrySearch}
+                </Button>
+              </div>
+            ) : searchItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                {texts.communities.noSearchResults(normalizedSearch)}
+              </p>
+            ) : (
+              <>
+                <h2 className="text-sm font-medium text-text-strong">
+                  {texts.communities.searchResultsTitle(normalizedSearch)}
+                </h2>
+
+                <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {searchItems.map((item) => (
+                    <li key={item.id}>
+                      <Link
+                        to="/comunidades/$communityId"
+                        params={{ communityId: item.id }}
+                        className="surface-card flex h-full min-w-0 items-start gap-3 rounded-2xl p-4 transition hover:shadow-[var(--shadow-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        {item.image ? (
+                          <img
+                            src={resolveCdnUrl(item.image)}
+                            alt=""
+                            className="h-12 w-12 shrink-0 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <Users aria-hidden="true" className="h-5 w-5" />
+                          </div>
+                        )}
+
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold">{item.title}</h3>
+
+                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                            {item.subtitle}
+                          </p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+
+                {searchItems.length === COMMUNITY_SEARCH_LIMIT && (
+                  <p className="text-sm text-muted-foreground">
+                    {texts.communities.searchLimitHint(COMMUNITY_SEARCH_LIMIT)}
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {TOPICS.map((t) => (
+                <Pill
+                  key={t}
+                  active={(t === "Todas" && !topic) || t === topic}
+                  onClick={() => handleTopicChange(t)}
+                >
+                  {TOPIC_LABELS[t]}
+                </Pill>
+              ))}
+            </div>
+
+            {pinnedFavorites.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="flex items-center gap-1.5 text-sm font-medium text-text-strong">
+                  <Star className="h-4 w-4 text-primary" />
+
+                  <>{texts.communities.favoritesTitle}</>
+                </h2>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {pinnedFavorites.map((c) => (
+                    <CommunityCard
+                      key={c.id}
+                      community={c}
+                      joinPending={join.isPending}
+                      leavePending={leave.isPending}
+                      ownerBlocked={ownerBlockedId === c.id}
+                      onJoin={join.mutate}
+                      onLeave={setLeaveTarget}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {pinnedFavorites.map((c) => (
+              {gridItems.map((c) => (
                 <CommunityCard
                   key={c.id}
                   community={c}
@@ -183,38 +334,24 @@ function Comunidades() {
                 />
               ))}
             </div>
-          </section>
-        )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {gridItems.map((c) => (
-            <CommunityCard
-              key={c.id}
-              community={c}
-              joinPending={join.isPending}
-              leavePending={leave.isPending}
-              ownerBlocked={ownerBlockedId === c.id}
-              onJoin={join.mutate}
-              onLeave={setLeaveTarget}
-            />
-          ))}
-        </div>
-
-        {nextCursor && (
-          <div className="flex justify-center pb-8">
-            <Button
-              variant="outline"
-              className="rounded-full"
-              onClick={loadMore}
-              disabled={isFetching}
-            >
-              {isFetching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                texts.communities.loadMore
-              )}
-            </Button>
-          </div>
+            {nextCursor && (
+              <div className="flex justify-center pb-8">
+                <Button
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={loadMore}
+                  disabled={isFetching}
+                >
+                  {isFetching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    texts.communities.loadMore
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
