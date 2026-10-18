@@ -482,6 +482,9 @@ export const texts = {
       error: "Não foi possível salvar. Tente novamente.",
     },
     linkedinImport: {
+      semEstrutura: (lista: string) =>
+        `Também vieram no arquivo, mas ainda não têm um lugar no perfil do Énóis: ${lista}.`,
+      connectFirst: "Conecte o LinkedIn para importar seus dados.",
       title: "Importar do LinkedIn",
       hint: "Baixe o arquivo de dados no LinkedIn (Configurações → Obter uma cópia dos seus dados) e suba aqui: o app lê experiências, formação, certificações e projetos para você revisar antes de salvar.",
       button: "Enviar arquivo do LinkedIn",
@@ -775,7 +778,9 @@ export const texts = {
         news: "Notícia",
         tutorial: "Tutorial",
         review: "Avaliação",
+        divertido: "Divertido",
         moment: "Momento",
+        momentHint: "Momento se apaga sozinho em 24 horas.",
       },
       typePicker: {
         label: "Tipo",
@@ -826,6 +831,8 @@ export const texts = {
   },
 
   posts: {
+    momentExpiry: (hours: number) => `some em ${hours}h`,
+    momentExpiryTitle: "Momento se apaga sozinho em 24 horas",
     types: {
       insight: "Insight",
       question: "Pergunta",
@@ -836,6 +843,7 @@ export const texts = {
       news: "Notícia",
       tutorial: "Tutorial",
       review: "Avaliação",
+      divertido: "Divertido",
       moment: "Momento",
     },
     formatting: {
@@ -1008,6 +1016,7 @@ export const texts = {
       uploadFailed: "Não foi possível enviar a mídia. Tente de novo.",
     },
     video: {
+      openLabel: "abrir no site",
       watchOn: (provider: string) => `Clique para assistir no ${provider}`,
       icons: {
         cinema: "🎬",
@@ -2160,6 +2169,26 @@ export const texts = {
   },
 
   empresa: {
+    editPanel: {
+      title: "Editar empresa",
+      description: "Nome é fixo; descrição, setor, tamanho, local, site, logo e capa são seus.",
+      descriptionLabel: "Descrição",
+      sector: "Setor",
+      size: "Tamanho",
+      location: "Localização",
+      website: "Site",
+      logo: "Logo",
+      cover: "Capa",
+      saved: "Página atualizada!",
+      error: "Não foi possível salvar a empresa.",
+      uploadError: "O upload da imagem falhou.",
+      team: "Equipe",
+      noMembers: "Ninguém além de você ainda.",
+      memberSearch: "Adicionar por nome ou @usuário",
+      memberAdd: "Adicionar",
+      memberAdded: "Membro adicionado!",
+      memberError: "Não foi possível adicionar o membro.",
+    },
     seoTitle: (name: string) => `${name} · Énóis`,
     jobsTitle: "Microprojetos",
     jobsEmpty: "Nenhum microprojeto aberto agora.",
