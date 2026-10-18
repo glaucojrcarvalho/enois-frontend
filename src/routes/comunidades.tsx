@@ -189,7 +189,6 @@ function Comunidades() {
             aria-hidden="true"
             className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
           />
-
           <Input
             id="community-directory-search"
             type="search"
